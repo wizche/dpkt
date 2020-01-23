@@ -427,7 +427,7 @@ class SSLFactory(object):
         return SSL2(buf)
 
 
-def tls_multi_factory(buf):
+def tls_multi_factory(buf, metadata={}):
     """
     Attempt to parse one or more TLSRecord's out of buf
 
@@ -449,6 +449,8 @@ def tls_multi_factory(buf):
         if v in SSL3_VERSION_BYTES:
             try:
                 msg = TLSRecord(buf[i:])
+                for k in metadata.keys():
+                    setattr(msg, k, metadata[k])
                 msgs.append(msg)
             except dpkt.NeedData:
                 break
