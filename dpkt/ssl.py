@@ -340,6 +340,15 @@ class TLSCertificate(dpkt.Packet):
        except struct.error:
             raise dpkt.NeedData
 
+class TLSCertificateStatus(dpkt.Packet):
+    #TODO: populate this
+    __hdr__ = tuple()
+
+class TLSEncryptedHandshake(dpkt.Packet):
+    #TODO: populate this
+    __hdr__ = tuple()
+    def unpack(self, buf):
+        pass
 
 class TLSUnknownHandshake(dpkt.Packet):
     __hdr__ = tuple()
@@ -367,6 +376,8 @@ HANDSHAKE_TYPES = {
     15: ('CertificateVerify', TLSCertificateVerify),
     16: ('ClientKeyExchange', TLSClientKeyExchange),
     20: ('Finished', TLSFinished),
+    22: ('CertificateStatus', TLSCertificateStatus),
+    9999: ('TLSEncryptedHandshake', TLSEncryptedHandshake)
 }
 
 
@@ -393,16 +404,22 @@ class TLSHandshake(dpkt.Packet):
     def unpack(self, buf):
         dpkt.Packet.unpack(self, buf)
         # Wait, might there be more than one message of self.type?
-        embedded_type = HANDSHAKE_TYPES.get(self.type, None)
-        if embedded_type is None:
-            raise SSL3Exception('Unknown or invalid handshake type %d' %
-                                self.type)
+        embedded_type = HANDSHAKE_TYPES.get(self.type, TLSEncryptedHandshake)
         # only take the right number of bytes
-        self.data = self.data[:self.length]
-        if len(self.data) != self.length:
-            raise dpkt.NeedData
-        # get class out of embedded_type tuple
-        self.data = embedded_type[1](self.data)
+        if embedded_type is not TLSEncryptedHandshake:
+            self.data = self.data[:self.length]
+            if len(self.data) != self.length and embedded_type is not TLSEncryptedHandshake:
+                # if there is a length mismatch we consider this a wrongly classified handshake message
+                # where the encrypted first byte match a valid handshake type
+                # TODO: this is for sure not a good idea, we should keep track of encrypted connection after we see the change cipher spec message
+                self.data = TLSEncryptedHandshake()
+                self.type = 9999
+            else:
+                # get class out of embedded_type tuple
+                self.data = embedded_type[1](self.data)
+        else:
+            self.data = embedded_type()
+            self.type = 9999
 
     @property
     def length(self):
